@@ -1,0 +1,528 @@
+
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Người Vận Chuyển</title>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#202020;font-family:Arial,sans-serif;touch-action:none}
+#game{position:absolute;inset:0;overflow:hidden;background:#91cdea}
+canvas#world{position:absolute;inset:0;width:100%;height:100%;display:block}
+#ui{position:absolute;inset:0;pointer-events:none;color:white}
+.info{position:absolute;left:2.5%;top:2%;width:49%;display:flex;flex-direction:column;gap:9px}
+.infoBox{background:#233441f5;border-radius:18px;padding:14px 12px;font-weight:bold;font-size:clamp(18px,4.8vw,29px);box-shadow:0 3px 6px #0002;white-space:nowrap}
+#phone{position:absolute;left:2.5%;top:23%;width:39%;max-width:330px;min-width:125px;background:#17191d;border:8px solid #303236;border-radius:38px;padding:13px 9px 15px;text-align:center;box-shadow:0 5px 15px #0005;pointer-events:auto}
+.phoneTitle{font-size:clamp(10px,2.8vw,17px);line-height:1.3;margin:3px 0 10px}
+#map{width:100%;height:auto;aspect-ratio:0.8;background:#dfe8d9;border-radius:20px;display:block}
+#mission{color:#44ff9b;font-size:clamp(10px,2.8vw,16px);line-height:1.4;margin-top:10px}
+#change{background:none;color:#51ff9f;border:0;font-weight:bold;font-size:12px;padding:6px}
+#buttons{position:absolute;right:5%;bottom:22%;display:flex;gap:10px;align-items:center;pointer-events:auto}
+.action{background:#172531f5;border:0;border-radius:23px;color:white;font-size:clamp(12px,3.7vw,20px);font-weight:bold;padding:15px 17px;box-shadow:0 3px 8px #0003;white-space:nowrap}
+#joystick{position:absolute;right:6%;bottom:4%;width:min(34vw,150px);height:min(34vw,150px);border:5px solid #ffffff99;background:#24455b88;border-radius:50%;pointer-events:auto;touch-action:none}
+#knob{position:absolute;width:39%;height:39%;left:30.5%;top:30.5%;background:#f2f2f2;border:5px solid #999;border-radius:50%;box-shadow:0 2px 4px #0005}
+#gas{position:absolute;right:7%;bottom:19%;pointer-events:auto;border:0;border-radius:15px;background:#138b64;color:white;padding:12px 18px;font-weight:bold;font-size:14px}
+#notice{position:absolute;left:50%;top:45%;transform:translate(-50%,-50%);background:#172b39f5;border-radius:16px;padding:16px;text-align:center;font-weight:bold;display:none;width:80%;max-width:300px;pointer-events:auto}
+#notice button{background:#1fa873;color:white;border:0;padding:10px;border-radius:9px;margin-top:8px}
+#garage{display:none;position:absolute;inset:0;background:#000a;align-items:center;justify-content:center;pointer-events:auto}
+#garageBox{width:85%;max-width:340px;background:#203440;border-radius:20px;padding:22px;text-align:center}
+#garageBox button{border:0;border-radius:10px;background:#20a879;color:white;padding:11px;margin:4px;font-weight:bold}
+@media(max-height:650px){
+ .info{gap:5px}.infoBox{padding:9px}
+ #phone{top:23%;border-radius:25px;padding:7px}
+ #buttons{bottom:19%}.action{padding:10px}
+ #gas{bottom:16%}
+}
+</style>
+</head>
+<body>
+<div id="game">
+ <canvas id="world"></canvas>
+ <div id="ui">
+  <div class="info">
+   <div class="infoBox">💵 <span id="money">Tiền: 0 đ</span></div>
+   <div class="infoBox">🏍️ <span id="vehicle">Xe máy cơ bản</span></div>
+   <div class="infoBox">📦 <span id="status">Chưa lấy hàng</span></div>
+  </div>
+
+  <div id="phone">
+   <div class="phoneTitle">📱 BẢN ĐỒ GIAO<br>HÀNG</div>
+   <canvas id="map" width="260" height="320"></canvas>
+   <div id="mission">ĐI ĐẾN ĐIỂM LẤY HÀNG</div>
+   <button id="change" onclick="changeOrder()">↻ ĐỔI ĐƠN HÀNG</button>
+  </div>
+
+  <div id="buttons">
+   <button class="action" id="brake">PHANH</button>
+   <button class="action" id="buy" onclick="openGarage()">🚘 MUA XE</button>
+  </div>
+
+  <button id="gas">▲ CHẠY</button>
+  <div id="joystick"><div id="knob"></div></div>
+
+  <div id="notice"></div>
+  <div id="garage">
+   <div id="garageBox">
+    <h2>🏍️ CỬA HÀNG XE</h2>
+    <h3 id="carName"></h3>
+    <p id="carDetails"></p>
+    <button onclick="previousCar()">◀</button>
+    <button onclick="purchaseCar()">MUA / CHỌN XE</button>
+    <button onclick="nextCar()">▶</button>
+    <p><button onclick="closeGarage()">ĐÓNG</button></p>
+   </div>
+  </div>
+ </div>
+</div>
+
+<script>
+const canvas=document.getElementById('world');
+const ctx=canvas.getContext('2d');
+const map=document.getElementById('map');
+const mc=map.getContext('2d');
+
+let W=0,H=0,D=1;
+function resize(){
+ D=Math.min(devicePixelRatio||1,1.5);
+ W=innerWidth;H=innerHeight;
+ canvas.width=W*D;canvas.height=H*D;
+ canvas.style.width=W+'px';canvas.style.height=H+'px';
+ ctx.setTransform(D,0,0,D,0,0);
+}
+addEventListener('resize',resize);resize();
+
+const roads=[-2,0,2];
+const player={
+ x:0,lane:0,speed:0,maxSpeed:85,
+ money:0,yaw:0,alive:true,package:false
+};
+const vehicles=[
+ {name:'Xe máy cơ bản',price:0,max:85,color:'#e4d6a1'},
+ {name:'Xe tay ga',price:250,color:'#e8eeee',max:100},
+ {name:'Xe giao hàng Pro',price:700,color:'#299ddd',max:115},
+ {name:'Xe điện cao cấp',price:1600,color:'#42c987',max:130}
+];
+let owned=new Set([0]),carIndex=0;
+
+const shops=[
+ ['HỦ TIẾU','#c84332'],['BÁNH MÌ','#d69b23'],
+ ['BÚN RIÊU','#b74040'],['TRÀ SỮA','#8058a9'],
+ ['CƠM TẤM','#477b4c'],['TẠP HÓA','#2989a9'],
+ ['PHỞ BÒ','#b9873c']
+];
+const buildings=[];
+for(let side of [-1,1]){
+ for(let i=0;i<65;i++){
+  buildings.push({
+   side,dist:35+i*24+Math.random()*12,
+   width:18+Math.random()*12,
+   height:35+Math.random()*60,
+   color:['#a3ad9b','#b5a8a2','#8c9f92','#c4b7a6','#c4c9b8'][Math.floor(Math.random()*5)],
+   sign:shops[Math.floor(Math.random()*shops.length)],
+   tree:Math.random()<.38
+  });
+ }
+}
+
+const traffic=[];
+function spawnCar(dist,lane){
+ return {
+  dist,lane,width:Math.random()<.25?1.3:.95,
+  color:['#d9b53c','#4e98c5','#c94939','#d9dedb','#3e4a4c'][Math.floor(Math.random()*5)],
+  speed:12+Math.random()*24
+ };
+}
+for(let i=0;i<18;i++)traffic.push(spawnCar(80+i*38,[-1.25,-.4,.4,1.25][i%4]));
+
+const walkers=[];
+for(let i=0;i<35;i++)walkers.push({
+ dist:45+i*28,side:i%2?1:-1,
+ color:['#e5b34f','#4c98bc','#cc6654','#4d8057'][i%4]
+});
+
+const locations=[
+ {name:'Quán bánh mì',dist:220,lane:-1.6},
+ {name:'Trung tâm nhận hàng',dist:500,lane:1.6},
+ {name:'Khách hàng khu phố',dist:780,lane:-1.6},
+ {name:'Quán hủ tiếu',dist:1050,lane:1.6},
+ {name:'Khách hàng đường lớn',dist:1400,lane:-1.6},
+ {name:'Khu dân cư',dist:1700,lane:1.6},
+ {name:'Cửa hàng bún riêu',dist:2050,lane:-1.6}
+];
+let pickup=locations[1],dropoff=locations[2],stage='pickup';
+let worldDistance=0,steering=0;
+let noticeTimer=null;
+
+function target(){return stage==='pickup'?pickup:dropoff}
+function updateMission(){
+ document.getElementById('mission').textContent=
+ stage==='pickup'?'ĐI ĐẾN ĐIỂM LẤY HÀNG':'ĐI ĐẾN ĐIỂM GIAO HÀNG';
+ document.getElementById('status').textContent=
+ player.package?'Đang giữ hàng':'Chưa lấy hàng';
+}
+function changeOrder(){
+ if(player.package){showNotice('Hãy giao đơn hàng đang giữ trước!');return}
+ pickup=locations[Math.floor(Math.random()*locations.length)];
+ do{dropoff=locations[Math.floor(Math.random()*locations.length)]}
+ while(dropoff===pickup);
+ stage='pickup';updateMission();
+}
+function showNotice(text,button=false){
+ const el=document.getElementById('notice');
+ el.innerHTML=text+(button?'<br><button onclick="restart()">CHƠI LẠI</button>':'');
+ el.style.display='block';
+ if(noticeTimer)clearTimeout(noticeTimer);
+ if(!button)noticeTimer=setTimeout(()=>el.style.display='none',2200);
+}
+
+function openGarage(){
+ if(player.speed>2){showNotice('Hãy dừng xe trước khi mua xe!');return}
+ carIndex=player.currentCar||0;
+ renderGarage();
+ document.getElementById('garage').style.display='flex';
+}
+function closeGarage(){document.getElementById('garage').style.display='none'}
+function nextCar(){carIndex=(carIndex+1)%vehicles.length;renderGarage()}
+function previousCar(){carIndex=(carIndex+vehicles.length-1)%vehicles.length;renderGarage()}
+function renderGarage(){
+ const c=vehicles[carIndex];
+ document.getElementById('carName').textContent=c.name;
+ document.getElementById('carDetails').textContent=
+ 'Giá: '+c.price+' đ | Tốc độ tối đa: '+c.max+' km/h | '+
+ (owned.has(carIndex)?'Đã sở hữu':'Chưa sở hữu');
+}
+function purchaseCar(){
+ const c=vehicles[carIndex];
+ if(!owned.has(carIndex)){
+  if(player.money<c.price){showNotice('Bạn chưa đủ tiền mua xe!');return}
+  player.money-=c.price;owned.add(carIndex);
+ }
+ player.currentCar=carIndex;player.maxSpeed=c.max;
+ document.getElementById('money').textContent='Tiền: '+player.money+' đ';
+ document.getElementById('vehicle').textContent=c.name;
+ closeGarage();showNotice('Đã chọn '+c.name);
+}
+window.changeOrder=changeOrder;
+window.openGarage=openGarage;
+window.closeGarage=closeGarage;
+window.nextCar=nextCar;
+window.previousCar=previousCar;
+window.purchaseCar=purchaseCar;
+
+let joy={x:0,y:0},pointer=null;
+const joystick=document.getElementById('joystick');
+const knob=document.getElementById('knob');
+function moveJoy(e){
+ const r=joystick.getBoundingClientRect();
+ let dx=e.clientX-(r.left+r.width/2);
+ let dy=e.clientY-(r.top+r.height/2);
+ let max=r.width*.32;
+ const len=Math.hypot(dx,dy)||1;
+ const k=Math.min(1,max/len);
+ joy={x:dx/len*k,y:dy/len*k};
+ knob.style.left=(30.5+joy.x*32)+'%';
+ knob.style.top=(30.5+joy.y*32)+'%';
+}
+function resetJoy(){
+ pointer=null;joy={x:0,y:0};
+ knob.style.left='30.5%';knob.style.top='30.5%';
+}
+joystick.addEventListener('pointerdown',e=>{
+ pointer=e.pointerId;joystick.setPointerCapture(e.pointerId);moveJoy(e);
+});
+joystick.addEventListener('pointermove',e=>{
+ if(pointer===e.pointerId)moveJoy(e);
+});
+joystick.addEventListener('pointerup',resetJoy);
+joystick.addEventListener('pointercancel',resetJoy);
+
+let gas=false,brake=false;
+function hold(id,fn){
+ const el=document.getElementById(id);
+ el.addEventListener('pointerdown',e=>{
+  e.preventDefault();fn(true);
+  el.setPointerCapture(e.pointerId);
+ });
+ ['pointerup','pointercancel','lostpointercapture'].forEach(ev=>
+  el.addEventListener(ev,()=>fn(false)));
+}
+hold('gas',v=>gas=v);
+hold('brake',v=>brake=v);
+const keys={};
+addEventListener('keydown',e=>keys[e.key.toLowerCase()]=true);
+addEventListener('keyup',e=>keys[e.key.toLowerCase()]=false);
+
+function perspective(dist){
+ return Math.max(0,Math.min(1,1/(1+dist*.006)));
+}
+function project(dist,lane,height=0){
+ const p=perspective(dist);
+ const horizon=H*.535;
+ const y=horizon+(H*.55)*p;
+ const roadHalf=W*.57*p+W*.035;
+ const x=W/2+lane*roadHalf*.43+steering*W*.2*p;
+ return {x,y,p,roadHalf};
+}
+function drawBuilding(b){
+ let dist=b.dist-worldDistance%2100;
+ if(dist<3)dist+=2100;
+ const p=perspective(dist);
+ const horizon=H*.535;
+ const y=horizon+(H*.55)*p;
+ const roadHalf=W*.57*p+W*.035;
+ const x=W/2+b.side*(roadHalf+W*.22*p);
+ const bw=b.width*p*1.9+2,bh=b.height*p*1.6;
+ ctx.fillStyle=b.color;
+ ctx.fillRect(x-bw/2,y-bh,bw,bh);
+ ctx.fillStyle='#8a8d85';
+ ctx.fillRect(x-bw/2-2,y-bh,bw+4,Math.max(2,3*p));
+ ctx.fillStyle=b.sign[1];
+ ctx.fillRect(x-bw*.42,y-bh*.78,bw*.84,Math.max(5,bh*.11));
+ if(p>.13){
+  ctx.fillStyle='white';
+  ctx.textAlign='center';
+  ctx.font='bold '+Math.max(5,Math.min(13,bw*.11))+'px Arial';
+  ctx.fillText(b.sign[0],x,y-bh*.71);
+ }
+ if(b.tree&&p>.12){
+  ctx.fillStyle='#73543b';
+  ctx.fillRect(x+bw*.4,y-20*p,3*p,20*p);
+  ctx.fillStyle='#267b45';
+  ctx.beginPath();ctx.arc(x+bw*.4,y-24*p,10*p+2,0,Math.PI*2);ctx.fill();
+ }
+}
+function drawWorld(){
+ ctx.clearRect(0,0,W,H);
+ ctx.fillStyle='#91cdea';ctx.fillRect(0,0,W,H*.54);
+ ctx.fillStyle='#83a17d';ctx.fillRect(0,H*.48,W,H*.52);
+
+ // Nhà hai bên phố
+ buildings.forEach(drawBuilding);
+
+ // Đường phối cảnh
+ const horizon=H*.535;
+ ctx.fillStyle='#4b4e4d';
+ ctx.beginPath();
+ ctx.moveTo(W*.43,horizon);ctx.lineTo(W*.57,horizon);
+ ctx.lineTo(W*1.16,H);ctx.lineTo(-W*.16,H);ctx.closePath();ctx.fill();
+
+ // Vạch làn đường
+ for(let i=0;i<14;i++){
+  let d=((i*45-worldDistance%630)+630)%630+5;
+  let p=perspective(d);
+  let y=horizon+(H*.55)*p;
+  let half=W*.57*p+W*.035;
+  ctx.fillStyle='#f7efbb';
+  ctx.fillRect(W/2-half*.35,y,Math.max(1,2.8*p),Math.max(2,30*p));
+  ctx.fillRect(W/2+half*.35,y,Math.max(1,2.8*p),Math.max(2,30*p));
+ }
+
+ // Dải phân cách
+ ctx.fillStyle='#deded9';
+ ctx.beginPath();
+ ctx.moveTo(W*.485,horizon);ctx.lineTo(W*.515,horizon);
+ ctx.lineTo(W*.78,H);ctx.lineTo(W*.15,H);ctx.closePath();ctx.fill();
+
+ // Vỉa hè hai bên
+ for(let side of [-1,1]){
+  ctx.fillStyle='#b9bdb4';
+  ctx.beginPath();
+  ctx.moveTo(W/2+side*W*.075,horizon);
+  ctx.lineTo(W/2+side*W*.1,horizon);
+  ctx.lineTo(W/2+side*W*.7,H);
+  ctx.lineTo(W/2+side*W*.58,H);
+  ctx.closePath();ctx.fill();
+  // Hàng rào
+  for(let i=0;i<24;i++){
+   const d=((i*33-worldDistance%792)+792)%792+6;
+   const p=perspective(d);
+   const y=horizon+H*.55*p;
+   const half=W*.57*p+W*.035;
+   const x=W/2+side*(half+W*.04*p);
+   ctx.strokeStyle='#c5c9c2';ctx.lineWidth=Math.max(1,p*3);
+   ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x,y-20*p);ctx.stroke();
+  }
+ }
+
+ // Xe giao thông
+ traffic.forEach(c=>{
+  let dist=c.dist-worldDistance;
+  while(dist<4)dist+=2200;
+  while(dist>2200)dist-=2200;
+  const q=project(dist,c.lane);
+  const w=Math.max(3,32*q.p*c.width);
+  const h=Math.max(4,47*q.p);
+  ctx.fillStyle='#282e30';
+  ctx.fillRect(q.x-w*.55,q.y-h*.05,w*1.1,h*.13);
+  ctx.fillStyle=c.color;
+  ctx.fillRect(q.x-w/2,q.y-h,w,h);
+  ctx.fillStyle='#a9c8d6';
+  ctx.fillRect(q.x-w*.34,q.y-h*.83,w*.68,h*.3);
+  ctx.fillStyle='#ffe5a1';
+  ctx.fillRect(q.x-w*.43,q.y-h*.13,w*.17,h*.08);
+  ctx.fillRect(q.x+w*.26,q.y-h*.13,w*.17,h*.08);
+ });
+
+ // Người đi bộ trên vỉa hè
+ walkers.forEach(a=>{
+  let dist=a.dist-worldDistance;
+  while(dist<4)dist+=2400;
+  const q=project(dist,a.side*2.1);
+  if(q.p<.04)return;
+  ctx.fillStyle=a.color;
+  ctx.fillRect(q.x-3*q.p,q.y-21*q.p,6*q.p,13*q.p);
+  ctx.fillStyle='#d9aa83';
+  ctx.beginPath();ctx.arc(q.x,q.y-24*q.p,3*q.p,0,Math.PI*2);ctx.fill();
+ });
+
+ // Đầu xe và tay lái
+ ctx.fillStyle='#292724';
+ ctx.beginPath();
+ ctx.moveTo(W*.43,H*.84);ctx.lineTo(W*.57,H*.84);
+ ctx.lineTo(W*.62,H);ctx.lineTo(W*.38,H);ctx.closePath();ctx.fill();
+ ctx.fillStyle=vehicles[player.currentCar||0].color;
+ ctx.fillRect(W*.15,H*.795,W*.7,H*.018);
+ ctx.fillStyle='#e6d994';
+ ctx.fillRect(W*.4,H*.78,W*.2,H*.02);
+}
+function drawMap(){
+ const w=map.width,h=map.height;
+ mc.fillStyle='#dfe8d9';mc.fillRect(0,0,w,h);
+ const roadXs=[w*.52];
+ mc.fillStyle='#a4adae';
+ mc.fillRect(w*.42,0,w*.2,h);
+ mc.fillStyle='#b7bfba';
+ for(let y=25;y<h;y+=61)mc.fillRect(20,y,w-40,9);
+ mc.fillStyle='#f9f6d7';mc.fillRect(w*.51,0,3,h);
+
+ // Tuyến màu xanh và các đoạn rẽ
+ const t=target();
+ let endY=stage==='pickup'?h*.32:h*.18;
+ mc.strokeStyle='#13b867';mc.lineWidth=8;mc.lineJoin='round';
+ mc.beginPath();
+ mc.moveTo(w*.52,h*.88);
+ mc.lineTo(w*.52,h*.65);
+ mc.lineTo(w*.32,h*.65);
+ mc.lineTo(w*.32,endY);
+ mc.stroke();
+
+ mc.fillStyle='#2678ed';mc.beginPath();
+ mc.arc(w*.52,h*.88,9,0,Math.PI*2);mc.fill();
+ mc.fillStyle='#e44a47';mc.beginPath();
+ mc.arc(w*.32,endY,10,0,Math.PI*2);mc.fill();
+ mc.fillStyle='#25363e';mc.font='bold 14px Arial';
+ mc.textAlign='left';
+ mc.fillText(stage==='pickup'?'LẤY':'GIAO',w*.08,endY+4);
+}
+
+let last=performance.now(),mapTick=0;
+function loop(now){
+ requestAnimationFrame(loop);
+ const dt=Math.min((now-last)/1000,.04);last=now;
+
+ const forward=gas||keys['w']||keys['arrowup']||joy.y<-.45;
+ const reverse=brake||keys['s']||keys['arrowdown']||joy.y>.55;
+ const steer=Math.max(-1,Math.min(1,joy.x+
+  ((keys['a']||keys['arrowleft'])?-1:0)+
+  ((keys['d']||keys['arrowright'])?1:0)));
+
+ if(player.alive){
+  // Tăng tốc êm, thả nút thì xe từ từ giảm tốc
+  if(forward)player.speed=Math.min(player.maxSpeed,player.speed+18*dt);
+  else player.speed=Math.max(0,player.speed-5*dt);
+  if(reverse)player.speed=Math.max(0,player.speed-35*dt);
+
+  // Chỉ đổi làn theo thao tác người chơi, không tự lạng lách
+  player.lane+=steer*1.15*dt;
+  player.lane=Math.max(-1.85,Math.min(1.85,player.lane));
+
+  worldDistance+=player.speed*dt;
+  traffic.forEach(c=>c.dist-=Math.max(0,player.speed-c.speed)*dt);
+
+  for(const c of traffic){
+   let d=c.dist-worldDistance;
+   if(d> -4&&d<4&&Math.abs(c.lane-player.lane)<.58&&player.speed>10){
+    player.alive=false;player.speed=0;
+    showNotice('💥 VA CHẠM! NHIỆM VỤ THẤT BẠI',true);
+   }
+  }
+  document.getElementById('speed').textContent='';
+ }
+
+ drawWorld();
+ mapTick+=dt;
+ if(mapTick>.15){drawMap();mapTick=0}
+ requestAnimationFrame;
+}
+</script>
+
+<script>
+// Khởi chạy trò chơi và hệ thống giao nhận
+(function(){
+ const originalLoop=loop;
+ let lastTime=performance.now(),mapTime=0;
+ function frame(now){
+  requestAnimationFrame(frame);
+  const dt=Math.min((now-lastTime)/1000,.04);lastTime=now;
+  if(player.alive){
+   const moving=gas||keys['w']||keys['arrowup']||joy.y<-.45;
+   const stopping=brake||keys['s']||keys['arrowdown']||joy.y>.55;
+   if(moving)player.speed=Math.min(player.maxSpeed,player.speed+18*dt);
+   else player.speed=Math.max(0,player.speed-4*dt);
+   if(stopping)player.speed=Math.max(0,player.speed-35*dt);
+   const steer=Math.max(-1,Math.min(1,joy.x+
+    ((keys['a']||keys['arrowleft'])?-1:0)+
+    ((keys['d']||keys['arrowright'])?1:0)));
+   player.lane=Math.max(-1.85,Math.min(1.85,player.lane+steer*1.15*dt));
+   worldDistance+=player.speed*dt;
+   traffic.forEach(c=>{c.dist-=Math.max(0,player.speed-c.speed)*dt});
+   traffic.forEach(c=>{
+    let d=c.dist-worldDistance;
+    if(d>-4&&d<4&&Math.abs(c.lane-player.lane)<.55&&player.speed>10){
+     player.alive=false;player.speed=0;
+     showNotice('💥 VA CHẠM! NHIỆM VỤ THẤT BẠI',true);
+    }
+   });
+  }
+  drawWorld();mapTime+=dt;
+  if(mapTime>.15){drawMap();mapTime=0}
+ }
+ requestAnimationFrame(frame);
+})();
+
+function restart(){
+ player.alive=true;player.speed=0;player.lane=0;worldDistance=0;
+ player.money=0;player.package=false;
+ document.getElementById('money').textContent='Tiền: 0 đ';
+ traffic.forEach((c,i)=>c.dist=80+i*38);
+ stage='pickup';updateMission();
+ document.getElementById('notice').style.display='none';
+}
+
+function stopAtTarget(){
+ const t=target();
+ return player.speed<3&&Math.abs(player.lane-t.lane)<.45;
+}
+document.getElementById('gas').addEventListener('dblclick',e=>e.preventDefault());
+document.getElementById('phone').addEventListener('dblclick',e=>e.preventDefault());
+
+// Giữ nút lấy/giao hàng bằng cách chạm vào phần trạng thái trên cùng
+document.getElementById('status').parentElement.style.cursor='pointer';
+document.getElementById('status').parentElement.addEventListener('click',()=>{
+ if(!player.alive)return;
+ if(!stopAtTarget()){showNotice('Hãy tấp vào lề và dừng xe gần điểm xanh!');return}
+ if(stage==='pickup'){
+  player.package=true;stage='dropoff';showNotice('📦 ĐÃ LẤY HÀNG!');
+ }else{
+  player.package=false;player.money+=100;
+  document.getElementById('money').textContent='Tiền: '+player.money+' đ';
+  showNotice('✅ GIAO HÀNG THÀNH CÔNG +100 đ');
+  changeOrder();
+ }
+ updateMission();
+});
+})();
+</script>
+</body>
+</html>
